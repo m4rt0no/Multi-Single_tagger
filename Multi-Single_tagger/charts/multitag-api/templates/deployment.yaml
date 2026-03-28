@@ -1,0 +1,122 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "fullname" . }}
+  labels:
+    draft: {{ default "draft-app" .Values.draft }}
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}" 
+spec:
+  {{- if eq .Release.Namespace "production" }}
+    {{- if .Values.hpa.enabled.production }}
+{{ toYaml .Values.hpa.production | indent 2 -}}
+    {{- else }}
+  replicas: {{ .Values.replicas.production }}
+    {{- end }}
+  {{- else }}
+    {{- if .Values.hpa.enabled.staging }}
+{{ toYaml .Values.hpa.staging | indent 2 -}}
+    {{- else }}
+  replicas: {{ .Values.replicas.staging }}
+    {{- end}}
+  {{- end}}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 2
+  selector:
+    matchLabels:
+      app: {{ template "fullname" . }}
+  template:
+    metadata:
+      labels:
+        draft: {{ default "draft-app" .Values.draft }}
+        app: {{ template "fullname" . }}       
+      annotations:
+{{- if .Values.datadogAnnotations }}
+        ad.datadoghq.com/tags: |
+          {
+            "env": "{{ .Release.Namespace }}",
+            "service": "{{ .Chart.Name }}",
+            "version":"{{ .Values.image.tag }}"
+          }
+        ad.datadoghq.com/{{ .Chart.Name }}.logs: |
+          [{
+             "source": "python",
+             "service": "{{ .Chart.Name }}"            
+          }]
+{{- end }}
+{{- if .Values.podAnnotations }}
+{{ toYaml .Values.podAnnotations | indent 8 }}
+{{- end }}
+    spec:
+      containers:
+      - name: {{ .Chart.Name }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        volumeMounts:
+{{- if .Values.config.share}}
+        - name: {{ .Values.sharedConfig.configShare.configVolumeName }}
+          mountPath: {{ .Values.sharedConfig.configShare.configVolumePath }}
+{{- end }}
+        ports:
+        - containerPort: {{ .Values.service.internalPort }}
+        env:
+{{- if .Values.env.env }}
+{{ toYaml .Values.env.env | indent 8 -}}
+{{- end}}
+        envFrom:
+{{- if .Values.config.configMap}}
+        - configMapRef:
+            name: {{ .Values.config.configMap }}
+{{- end}}
+{{- if .Values.db.redis }}
+        - secretRef:
+            name: {{ .Values.sharedConfig.secrets.redis }}
+{{- end}}
+{{- if .Values.db.mysql }}
+        - secretRef:
+            name: {{ .Values.sharedConfig.secrets.mysql }}
+{{- end}}
+{{- if .Values.db.mongodb }}
+        - secretRef:
+            name: {{ .Values.sharedConfig.secrets.mongodb }}
+{{- end}}
+{{- if .Values.db.elasticsearch }}
+        - secretRef:
+            name: {{ .Values.sharedConfig.secrets.elasticsearch }}
+{{- end}}
+{{- if .Values.env.envFrom }}
+{{ toYaml .Values.env.envFrom | indent 8 -}}
+{{- end}}
+{{- if .Values.probes.enabled }}
+        livenessProbe:
+          httpGet:
+            path: {{ .Values.probePath }}
+            port: {{ .Values.service.internalPort }}
+          initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+          successThreshold: {{ .Values.livenessProbe.successThreshold }}
+          timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
+        readinessProbe:
+          httpGet:
+            path: {{ .Values.probePath }}
+            port: {{ .Values.service.internalPort }}
+          periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+          successThreshold: {{ .Values.readinessProbe.successThreshold }}
+          timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
+{{- end }}        
+        resources:
+{{- if eq .Release.Namespace "production" }}
+{{ toYaml .Values.resources.production | indent 10 }}
+{{- else }}
+{{ toYaml .Values.resources.staging | indent 10 }}
+{{- end }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      volumes:
+{{- if .Values.config.share}}
+      - name: {{ .Values.sharedConfig.configShare.configVolumeName }}
+        persistentVolumeClaim:
+          claimName: {{ .Release.Namespace }}-{{ .Values.sharedConfig.configShare.claimName }}
+{{- end }}
+      priorityClassName: {{ .Values.priority }}

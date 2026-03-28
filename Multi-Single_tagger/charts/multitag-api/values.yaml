@@ -1,0 +1,92 @@
+# Default values for multitag-api.
+# Service and Deployment
+replicas:
+  production: 1
+  staging: 1
+image:
+  repository: draft
+  tag: dev
+  pullPolicy: IfNotPresent
+service:
+  type: ClusterIP
+  externalPort: 8080
+  internalPort: 8000
+# Resources for staging and Production
+resources:
+  production:
+    limits:
+      cpu: '6'
+      memory: 4Gi
+      ephemeral-storage: 500Mi
+    requests:
+      cpu: '0.3'
+      memory: 600Mi
+      ephemeral-storage: 400Mi
+  staging:
+    limits:
+      cpu: '2'
+      memory: 4Gi
+      ephemeral-storage: 500Mi
+    requests:
+      cpu: '1'
+      memory: 2Gi
+      ephemeral-storage: 400Mi
+probes:
+  enabled: false
+# Liveness data
+probePath: /healthz
+livenessProbe:
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  successThreshold: 1
+  timeoutSeconds: 1
+readinessProbe:
+  periodSeconds: 10
+  successThreshold: 1
+  timeoutSeconds: 1
+terminationGracePeriodSeconds: 10
+
+# Priority for Resources
+priority: ""
+# Environment Variables
+env:
+  env:
+  envFrom:
+# Configmap for Environment Variables
+config:
+  configMap: multitag-api
+  share: false
+# Use DB Secrets as Environment Variables
+db:
+  redis: false
+  mysql: false
+  mongodb: false
+  elasticsearch: false
+# HorizontalPodAutoscaler
+hpa:
+  enabled:
+    staging: false
+    production: false
+  staging:
+    minReplicas: 2
+    maxReplicas: 4
+    cpuTargetAverageUtilization: 95
+  production:
+    minReplicas: 2
+    maxReplicas: 14
+    cpuTargetAverageUtilization: 95
+# Shared volume config (only used when config.share is true)
+sharedConfig:
+  configShare:
+    configVolumeName: application-config
+    configVolumePath: /application-config
+    configVolumeShareName: application-config
+    configVolumeShareSecretName: config-secret
+    claimName: application-config-claim
+  secrets:
+    redis: redis-secret
+    mysql: mysql-secret
+    mongodb: mongodb-secret
+    elasticsearch: elasticsearch-secret
+datadogAnnotations: false
+podAnnotations: false

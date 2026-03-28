@@ -1,0 +1,6 @@
+{
+  "TST001": "Consulta simple [Pregunta general sin impacto operacional]",
+  "TST002": "Reclamo postventa [Problemas luego de la compra]",
+  "TST999": "Derivar a DM [Casos que requieren atención manual]"
+}
+
